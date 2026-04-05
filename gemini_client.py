@@ -1,6 +1,13 @@
+import asyncio
+import logging
+
 import google.generativeai as genai
+from google.api_core.exceptions import ResourceExhausted
+
 from config import GEMINI_API_KEY
 from faq import build_system_prompt
+
+logger = logging.getLogger(__name__)
 
 genai.configure(api_key=GEMINI_API_KEY)
 
@@ -19,10 +26,22 @@ def get_session(user_id: int) -> genai.ChatSession:
     return _sessions[user_id]
 
 
+def _send_sync(session: genai.ChatSession, message: str) -> str:
+    return session.send_message(message).text
+
+
 async def ask_gemini(user_id: int, message: str) -> str:
     session = get_session(user_id)
-    try:
-        response = session.send_message(message)
-        return response.text
-    except Exception as e:
-        return f"Кешіріңіз, қазір жауап бере алмаймын. Менеджерге тікелей жазыңыз. (Қате: {type(e).__name__})"
+    for attempt in range(3):
+        try:
+            return await asyncio.to_thread(_send_sync, session, message)
+        except ResourceExhausted:
+            if attempt < 2:
+                wait = (attempt + 1) * 2
+                logger.warning("ResourceExhausted, %s секунд күтіп retry...", wait)
+                await asyncio.sleep(wait)
+            else:
+                return "Сұраныстар тым көп, бірнеше секундтан соң қайталап көріңіз."
+        except Exception as e:
+            logger.error("Gemini error: %s", e)
+            return "Кешіріңіз, қазір жауап бере алмаймын. Менеджерге тікелей жазыңыз."
