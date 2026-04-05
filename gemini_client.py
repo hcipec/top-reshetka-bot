@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 genai.configure(api_key=GEMINI_API_KEY)
 
 _model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
+    model_name="gemini-2.5-flash-preview-04-17",
     system_instruction=build_system_prompt(),
 )
 
